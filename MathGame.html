@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arithmetic Game</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #666;
+    --line: #ddd;
+    --accent: #2563eb;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --bg-soft: #fafafa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .screen { width: 100%; max-width: 520px; }
+
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  p.desc { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+
+  .op-block { margin-bottom: 18px; }
+  .op-row { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .op-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+  .range-row { margin: 6px 0 0 27px; font-size: 14px; color: var(--muted); }
+  .range-row.static { font-style: normal; }
+  .num-input {
+    width: 52px;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+    margin: 0 2px;
+  }
+
+  .mode-block { margin: 24px 0; padding-top: 18px; border-top: 1px solid var(--line); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; margin-bottom: 12px; }
+  .toggle-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+  .end-config { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  select, .end-config input[type="number"] {
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  #startBtn {
+    display: block;
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #startBtn:hover { background: #1d4ed8; }
+
+  /* Game screen */
+  #game { text-align: center; }
+  #timerDisplay { font-size: 20px; font-weight: 600; color: var(--muted); margin-bottom: 24px; letter-spacing: 0.5px; }
+  #questionDisplay { font-size: 44px; font-weight: 700; margin-bottom: 20px; }
+  #answerInput {
+    font-size: 28px;
+    text-align: center;
+    width: 160px;
+    padding: 8px;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+  #answerInput:focus { outline: none; border-color: var(--accent); }
+  #correctCountRow { font-size: 15px; color: var(--muted); margin-bottom: 16px; }
+  #correctCount { font-weight: 700; color: var(--ink); }
+  #exitBtn {
+    padding: 6px 16px;
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  #exitBtn:hover { color: var(--bad); border-color: var(--bad); }
+
+  .history-box {
+    text-align: left;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .history-item {
+    font-size: 15px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .history-item.correct { color: var(--good); background: #f0fdf4; }
+  .history-item.incorrect { color: var(--bad); background: #fef2f2; }
+
+  /* Summary screen */
+  #summary { text-align: center; }
+  #summary h2 { font-size: 26px; margin-bottom: 20px; }
+  .summary-stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 24px; }
+  .stat { font-size: 15px; color: var(--muted); }
+  .stat strong { display: block; font-size: 26px; color: var(--ink); font-weight: 700; }
+  #returnBtn {
+    padding: 10px 20px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 24px;
+  }
+  #returnBtn:hover { background: #1d4ed8; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="screen">
+
+  <!-- LANDING -->
+  <div id="landing">
+    <h1>Arithmetic Game</h1>
+    <p class="desc">A fast-paced speed drill. Solve as many arithmetic problems as you can.</p>
+
+    <div class="op-block">
+      <label class="op-row"><input type="checkbox" id="addEnabled" checked> Addition</label>
+      <div class="range-row">
+        Range: (<input type="number" id="addMinA" class="num-input" value="2"> to <input type="number" id="addMaxA" class="num-input" value="50">)
+        + (<input type="number" id="addMinB" class="num-input" value="2"> to <input type="number" id="addMaxB" class="num-input" value="50">)
+      </div>
+    </div>
+
+    <div class="op-block">
+      <label class="op-row"><input type="checkbox" id="subEnabled" checked> Subtraction</label>
+      <div class="range-row static">Addition problems in reverse.</div>
+    </div>
+
+    <div class="op-block">
+      <label class="op-row"><input type="checkbox" id="mulEnabled" checked> Multiplication</label>
+      <div class="range-row">
+        Range: (<input type="number" id="multMinA" class="num-input" value="2"> to <input type="number" id="multMaxA" class="num-input" value="12">)
+        × (<input type="number" id="multMinB" class="num-input" value="2"> to <input type="number" id="multMaxB" class="num-input" value="100">)
+      </div>
+    </div>
+
+    <div class="op-block">
+      <label class="op-row"><input type="checkbox" id="divEnabled" checked> Division</label>
+      <div class="range-row static">Multiplication problems in reverse.</div>
+    </div>
+
+    <div class="mode-block">
+      <label class="toggle-row">
+        <input type="checkbox" id="fixedCountToggle">
+        Set fixed number of correct answers
+      </label>
+
+      <div id="durationRow" class="end-config">
+        Duration:
+        <select id="duration">
+          <option value="30">30 seconds</option>
+          <option value="60">60 seconds</option>
+          <option value="120" selected>120 seconds</option>
+          <option value="300">300 seconds</option>
+        </select>
+      </div>
+
+      <div id="targetRow" class="end-config hidden">
+        Number of correct answers:
+        <input type="number" id="targetCount" value="20" min="1">
+      </div>
+    </div>
+
+    <button id="startBtn">Start</button>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" class="hidden">
+    <div id="timerDisplay">0:00</div>
+    <div id="questionDisplay">-</div>
+    <input type="text" id="answerInput" inputmode="numeric" autocomplete="off" placeholder="?">
+    <div id="correctCountRow">Correct: <span id="correctCount">0</span></div>
+    <button id="exitBtn">Exit</button>
+    <div id="historyList" class="history-box"></div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div id="summary" class="hidden">
+    <h2>Results</h2>
+    <div class="summary-stats">
+      <div class="stat"><strong id="summaryTime">0:00</strong>time taken</div>
+      <div class="stat"><strong id="summaryCorrect">0</strong>correct</div>
+    </div>
+    <button id="returnBtn">Return to home</button>
+    <div id="summaryHistory" class="history-box"></div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  let mode;            // 'duration' | 'target'
+  let duration;        // seconds, for duration mode
+  let targetCount;     // for target mode
+  let remaining;        // duration mode countdown
+  let elapsed;          // target mode countup (also final time for duration mode)
+  let correctCount = 0;
+  let history = [];     // { text, correct }
+  let currentQ;
+  let timerInterval;
+  let cfg;
+
+  const el = (id) => document.getElementById(id);
+
+  function randInt(min, max) {
+    min = Math.ceil(min); max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function readConfig() {
+    return {
+      addition: el('addEnabled').checked,
+      subtraction: el('subEnabled').checked,
+      multiplication: el('mulEnabled').checked,
+      division: el('divEnabled').checked,
+      addMinA: parseInt(el('addMinA').value), addMaxA: parseInt(el('addMaxA').value),
+      addMinB: parseInt(el('addMinB').value), addMaxB: parseInt(el('addMaxB').value),
+      multMinA: parseInt(el('multMinA').value), multMaxA: parseInt(el('multMaxA').value),
+      multMinB: parseInt(el('multMinB').value), multMaxB: parseInt(el('multMaxB').value),
+    };
+  }
+
+  function generateQuestion() {
+    const ops = [];
+    if (cfg.addition) ops.push('add');
+    if (cfg.subtraction) ops.push('sub');
+    if (cfg.multiplication) ops.push('mul');
+    if (cfg.division) ops.push('div');
+    const op = ops[randInt(0, ops.length - 1)];
+
+    if (op === 'add') {
+      const a = randInt(cfg.addMinA, cfg.addMaxA);
+      const b = randInt(cfg.addMinB, cfg.addMaxB);
+      return { text: `${a} + ${b}`, answer: a + b };
+    }
+    if (op === 'sub') {
+      const a = randInt(cfg.addMinA, cfg.addMaxA);
+      const b = randInt(cfg.addMinB, cfg.addMaxB);
+      return { text: `${a + b} − ${a}`, answer: b };
+    }
+    if (op === 'mul') {
+      const a = randInt(cfg.multMinA, cfg.multMaxA);
+      const b = randInt(cfg.multMinB, cfg.multMaxB);
+      return { text: `${a} × ${b}`, answer: a * b };
+    }
+    // division
+    const a = Math.max(1, randInt(cfg.multMinA, cfg.multMaxA));
+    const b = randInt(cfg.multMinB, cfg.multMaxB);
+    return { text: `${a * b} ÷ ${a}`, answer: b };
+  }
+
+  function fmtTime(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function updateTimerDisplay() {
+    el('timerDisplay').textContent = fmtTime(mode === 'duration' ? remaining : elapsed);
+  }
+
+  function nextQuestion() {
+    currentQ = generateQuestion();
+    el('questionDisplay').textContent = currentQ.text + ' =';
+    el('answerInput').value = '';
+    el('answerInput').focus();
+  }
+
+  function renderHistoryInto(container) {
+    container.innerHTML = '';
+    history.forEach((h) => {
+      const div = document.createElement('div');
+      div.className = 'history-item ' + (h.correct ? 'correct' : 'incorrect');
+      div.textContent = h.text;
+      container.appendChild(div);
+    });
+  }
+
+  function tick() {
+    if (mode === 'duration') {
+      remaining--;
+      elapsed = duration - remaining;
+      if (remaining <= 0) {
+        remaining = 0;
+        elapsed = duration;
+        updateTimerDisplay();
+        endGame();
+        return;
+      }
+    } else {
+      elapsed++;
+    }
+    updateTimerDisplay();
+  }
+
+  function submitAnswer() {
+    const input = el('answerInput');
+    const raw = input.value.trim();
+    if (raw === '') return;
+    const userAns = parseInt(raw, 10);
+    const isCorrect = userAns === currentQ.answer;
+    history.unshift({ text: `${currentQ.text} ${raw}`, correct: isCorrect });
+    if (isCorrect) correctCount++;
+    el('correctCount').textContent = correctCount;
+    renderHistoryInto(el('historyList'));
+
+    if (mode === 'target' && correctCount >= targetCount) {
+      endGame();
+      return;
+    }
+    nextQuestion();
+  }
+
+  function startGame() {
+    cfg = readConfig();
+    if (!cfg.addition && !cfg.subtraction && !cfg.multiplication && !cfg.division) {
+      alert('Select at least one operation.');
+      return;
+    }
+
+    mode = el('fixedCountToggle').checked ? 'target' : 'duration';
+    elapsed = 0;
+    if (mode === 'target') {
+      targetCount = Math.max(1, parseInt(el('targetCount').value) || 20);
+    } else {
+      duration = parseInt(el('duration').value);
+      remaining = duration;
+    }
+
+    correctCount = 0;
+    history = [];
+    el('correctCount').textContent = '0';
+    el('historyList').innerHTML = '';
+
+    el('landing').classList.add('hidden');
+    el('summary').classList.add('hidden');
+    el('game').classList.remove('hidden');
+
+    updateTimerDisplay();
+    nextQuestion();
+
+    clearInterval(timerInterval);
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  function endGame() {
+    clearInterval(timerInterval);
+    el('game').classList.add('hidden');
+    el('summary').classList.remove('hidden');
+
+    el('summaryTime').textContent = fmtTime(elapsed);
+    el('summaryCorrect').textContent = correctCount;
+    renderHistoryInto(el('summaryHistory'));
+  }
+
+  function exitGame() {
+    endGame();
+  }
+
+  function resetToLanding() {
+    el('summary').classList.add('hidden');
+    el('landing').classList.remove('hidden');
+  }
+
+  el('fixedCountToggle').addEventListener('change', function () {
+    el('durationRow').classList.toggle('hidden', this.checked);
+    el('targetRow').classList.toggle('hidden', !this.checked);
+  });
+
+  el('startBtn').addEventListener('click', startGame);
+  el('exitBtn').addEventListener('click', exitGame);
+  el('returnBtn').addEventListener('click', resetToLanding);
+  el('answerInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') submitAnswer();
+  });
+})();
+</script>
+
+</body>
+</html>
