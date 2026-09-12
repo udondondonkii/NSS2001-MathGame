@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Arithmetic Game</title>
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 <style>
   :root {
     --ink: #1a1a1a;
@@ -156,8 +160,8 @@
     <div class="op-block">
       <label class="op-row"><input type="checkbox" id="addEnabled" checked> Addition</label>
       <div class="range-row">
-        Range: (<input type="number" id="addMinA" class="num-input" value="2"> to <input type="number" id="addMaxA" class="num-input" value="50">)
-        + (<input type="number" id="addMinB" class="num-input" value="2"> to <input type="number" id="addMaxB" class="num-input" value="50">)
+        Range: (<input type="number" id="addMinA" class="num-input" value="2" min="0" step="1"> to <input type="number" id="addMaxA" class="num-input" value="50" min="0" step="1">)
+        + (<input type="number" id="addMinB" class="num-input" value="2" min="0" step="1"> to <input type="number" id="addMaxB" class="num-input" value="50" min="0" step="1">)
       </div>
     </div>
 
@@ -169,8 +173,8 @@
     <div class="op-block">
       <label class="op-row"><input type="checkbox" id="mulEnabled" checked> Multiplication</label>
       <div class="range-row">
-        Range: (<input type="number" id="multMinA" class="num-input" value="2"> to <input type="number" id="multMaxA" class="num-input" value="12">)
-        × (<input type="number" id="multMinB" class="num-input" value="2"> to <input type="number" id="multMaxB" class="num-input" value="100">)
+        Range: (<input type="number" id="multMinA" class="num-input" value="2" min="0" step="1"> to <input type="number" id="multMaxA" class="num-input" value="12" min="0" step="1">)
+        × (<input type="number" id="multMinB" class="num-input" value="2" min="0" step="1"> to <input type="number" id="multMaxB" class="num-input" value="100" min="0" step="1">)
       </div>
     </div>
 
@@ -259,16 +263,34 @@
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
+  // Parses a config field as a non-negative integer. Anything invalid,
+  // negative, or fractional falls back to 0.
+  function toNonNegInt(value) {
+    const n = parseInt(value, 10);
+    if (isNaN(n) || n < 0) return 0;
+    return n;
+  }
+
+  // Ensures min <= max after clamping both to non-negative integers.
+  function normalizeRange(minVal, maxVal) {
+    let min = toNonNegInt(minVal);
+    let max = toNonNegInt(maxVal);
+    if (min > max) { const t = min; min = max; max = t; }
+    return [min, max];
+  }
+
   function readConfig() {
+    const [addMinA, addMaxA] = normalizeRange(el('addMinA').value, el('addMaxA').value);
+    const [addMinB, addMaxB] = normalizeRange(el('addMinB').value, el('addMaxB').value);
+    const [multMinA, multMaxA] = normalizeRange(el('multMinA').value, el('multMaxA').value);
+    const [multMinB, multMaxB] = normalizeRange(el('multMinB').value, el('multMaxB').value);
     return {
       addition: el('addEnabled').checked,
       subtraction: el('subEnabled').checked,
       multiplication: el('mulEnabled').checked,
       division: el('divEnabled').checked,
-      addMinA: parseInt(el('addMinA').value), addMaxA: parseInt(el('addMaxA').value),
-      addMinB: parseInt(el('addMinB').value), addMaxB: parseInt(el('addMaxB').value),
-      multMinA: parseInt(el('multMinA').value), multMaxA: parseInt(el('multMaxA').value),
-      multMinB: parseInt(el('multMinB').value), multMaxB: parseInt(el('multMaxB').value),
+      addMinA, addMaxA, addMinB, addMaxB,
+      multMinA, multMaxA, multMinB, multMaxB,
     };
   }
 
@@ -357,12 +379,19 @@
     updateTimerDisplay();
   }
 
+  // Only accepts plain non-negative integers, e.g. "19" — not "19.5", "-19", or "1e2".
+  // Anything else returns null, which never matches a real answer.
+  function parseStrictNonNegInt(raw) {
+    if (!/^\d+$/.test(raw)) return null;
+    return parseInt(raw, 10);
+  }
+
   function submitAnswer() {
     const input = el('answerInput');
     const raw = input.value.trim();
     if (raw === '') return;
-    const userAns = parseInt(raw, 10);
-    const isCorrect = userAns === currentQ.answer;
+    const userAns = parseStrictNonNegInt(raw);
+    const isCorrect = userAns !== null && userAns === currentQ.answer;
     history.unshift({ question: `${currentQ.text} =`, answer: raw, correct: isCorrect });
     if (isCorrect) correctCount++;
     el('correctCount').textContent = correctCount;
