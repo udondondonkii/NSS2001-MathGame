@@ -101,18 +101,26 @@
   .history-box {
     text-align: left;
     border-top: 1px solid var(--line);
-    padding-top: 12px;
-    max-height: 240px;
+    max-height: 260px;
     overflow-y: auto;
   }
-  .history-item {
-    font-size: 15px;
-    padding: 5px 8px;
-    border-radius: 4px;
-    margin-bottom: 4px;
+  .history-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .history-table thead th {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 10px 8px 6px;
+    border-bottom: 1px solid var(--line);
   }
-  .history-item.correct { color: var(--good); background: #f0fdf4; }
-  .history-item.incorrect { color: var(--bad); background: #fef2f2; }
+  .history-table td { padding: 6px 8px; }
+  .history-table tr.correct td { color: var(--good); background: #f0fdf4; }
+  .history-table tr.incorrect td { color: var(--bad); background: #fef2f2; }
+  .history-table td:first-child { border-radius: 4px 0 0 4px; }
+  .history-table td:last-child { border-radius: 0 4px 4px 0; }
 
   /* Summary screen */
   #summary { text-align: center; }
@@ -203,18 +211,28 @@
     <input type="text" id="answerInput" inputmode="numeric" autocomplete="off" placeholder="?">
     <div id="correctCountRow">Correct: <span id="correctCount">0</span></div>
     <button id="exitBtn">Exit</button>
-    <div id="historyList" class="history-box"></div>
+    <div class="history-box">
+      <table class="history-table">
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody id="historyList"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- SUMMARY -->
   <div id="summary" class="hidden">
     <h2>Results</h2>
     <div class="summary-stats">
-      <div class="stat"><strong id="summaryTime">0:00</strong>time taken</div>
+      <div class="stat"><strong id="summaryTime">0:00.000</strong>time taken</div>
       <div class="stat"><strong id="summaryCorrect">0</strong>correct</div>
     </div>
     <button id="returnBtn">Return to home</button>
-    <div id="summaryHistory" class="history-box"></div>
+    <div class="history-box">
+      <table class="history-table">
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody id="summaryHistory"></tbody>
+      </table>
+    </div>
   </div>
 
 </div>
@@ -224,10 +242,12 @@
   let mode;            // 'duration' | 'target'
   let duration;        // seconds, for duration mode
   let targetCount;     // for target mode
-  let remaining;        // duration mode countdown
-  let elapsed;          // target mode countup (also final time for duration mode)
+  let remaining;        // duration mode countdown (whole seconds, for display)
+  let elapsed;          // whole seconds elapsed (for live display)
+  let startTimestamp;   // performance.now() at game start, for precise ms timing
+  let finalElapsedMs;   // precise elapsed ms, set when the game ends
   let correctCount = 0;
-  let history = [];     // { text, correct }
+  let history = [];     // { question, answer, correct }
   let currentQ;
   let timerInterval;
   let cfg;
@@ -287,6 +307,15 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  function fmtPreciseTime(ms) {
+    const totalMs = Math.max(0, Math.round(ms));
+    const totalSeconds = Math.floor(totalMs / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    const msPart = totalMs % 1000;
+    return `${m}:${s.toString().padStart(2, '0')}.${msPart.toString().padStart(3, '0')}`;
+  }
+
   function updateTimerDisplay() {
     el('timerDisplay').textContent = fmtTime(mode === 'duration' ? remaining : elapsed);
   }
@@ -298,29 +327,32 @@
     el('answerInput').focus();
   }
 
-  function renderHistoryInto(container) {
-    container.innerHTML = '';
+  function renderHistoryInto(tbody) {
+    tbody.innerHTML = '';
     history.forEach((h) => {
-      const div = document.createElement('div');
-      div.className = 'history-item ' + (h.correct ? 'correct' : 'incorrect');
-      div.textContent = h.text;
-      container.appendChild(div);
+      const tr = document.createElement('tr');
+      tr.className = h.correct ? 'correct' : 'incorrect';
+      const tdQ = document.createElement('td');
+      tdQ.textContent = h.question;
+      const tdA = document.createElement('td');
+      tdA.textContent = h.answer;
+      tr.appendChild(tdQ);
+      tr.appendChild(tdA);
+      tbody.appendChild(tr);
     });
   }
 
   function tick() {
+    const elapsedSec = Math.floor((performance.now() - startTimestamp) / 1000);
     if (mode === 'duration') {
-      remaining--;
-      elapsed = duration - remaining;
+      remaining = Math.max(0, duration - elapsedSec);
       if (remaining <= 0) {
-        remaining = 0;
-        elapsed = duration;
         updateTimerDisplay();
         endGame();
         return;
       }
     } else {
-      elapsed++;
+      elapsed = elapsedSec;
     }
     updateTimerDisplay();
   }
@@ -331,7 +363,7 @@
     if (raw === '') return;
     const userAns = parseInt(raw, 10);
     const isCorrect = userAns === currentQ.answer;
-    history.unshift({ text: `${currentQ.text} ${raw}`, correct: isCorrect });
+    history.unshift({ question: `${currentQ.text} =`, answer: raw, correct: isCorrect });
     if (isCorrect) correctCount++;
     el('correctCount').textContent = correctCount;
     renderHistoryInto(el('historyList'));
@@ -371,16 +403,18 @@
     updateTimerDisplay();
     nextQuestion();
 
+    startTimestamp = performance.now();
     clearInterval(timerInterval);
     timerInterval = setInterval(tick, 1000);
   }
 
   function endGame() {
     clearInterval(timerInterval);
+    finalElapsedMs = performance.now() - startTimestamp;
     el('game').classList.add('hidden');
     el('summary').classList.remove('hidden');
 
-    el('summaryTime').textContent = fmtTime(elapsed);
+    el('summaryTime').textContent = fmtPreciseTime(finalElapsedMs);
     el('summaryCorrect').textContent = correctCount;
     renderHistoryInto(el('summaryHistory'));
   }
